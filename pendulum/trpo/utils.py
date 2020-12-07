@@ -2,29 +2,33 @@ import math
 import torch
 from torch.distributions import Normal
 
+
 def get_action(mu, std):
     normal = Normal(mu, std)
     action = normal.sample()
-    
+
     return action.data.numpy()
+
 
 def get_returns(rewards, masks, gamma):
     returns = torch.zeros_like(rewards)
     running_returns = 0
 
     for t in reversed(range(0, len(rewards))):
-        running_returns = rewards[t] + masks[t] * gamma * running_returns 
+        running_returns = rewards[t] + masks[t] * gamma * running_returns
         returns[t] = running_returns
 
     returns = (returns - returns.mean()) / returns.std()
 
     return returns
 
+
 def get_log_prob(actions, mu, std):
     normal = Normal(mu, std)
     log_prob = normal.log_prob(actions)
 
     return log_prob
+
 
 def surrogate_loss(actor, values, targets, states, old_policy, actions):
     mu, std = actor(torch.Tensor(states))
@@ -46,40 +50,42 @@ def conjugate_gradient(actor, states, b, nsteps, residual_tol=1e-10):
     p = b.clone()
     rdotr = torch.dot(r, r)
 
-    for i in range(nsteps): # nsteps = 10
+    for i in range(nsteps):  # nsteps = 10
         Ap = hessian_vector_product(actor, states, p, cg_damping=1e-1)
         alpha = rdotr / torch.dot(p, Ap)
-        
+
         x += alpha * p
         r -= alpha * Ap
-        
+
         new_rdotr = torch.dot(r, r)
         betta = new_rdotr / rdotr
-        
+
         p = r + betta * p
         rdotr = new_rdotr
-        
-        if rdotr < residual_tol: # residual_tol = 0.0000000001
+
+        if rdotr < residual_tol:  # residual_tol = 0.0000000001
             break
     return x
 
+
 def hessian_vector_product(actor, states, p, cg_damping=1e-1):
-    p.detach() 
+    p.detach()
     kl = kl_divergence(new_actor=actor, old_actor=actor, states=states)
     kl = kl.mean()
-    
+
     kl_grad = torch.autograd.grad(kl, actor.parameters(), create_graph=True)
     kl_grad = flat_grad(kl_grad)
 
-    kl_grad_p = (kl_grad * p).sum() 
+    kl_grad_p = (kl_grad * p).sum()
     kl_hessian = torch.autograd.grad(kl_grad_p, actor.parameters())
     kl_hessian = flat_hessian(kl_hessian)
 
-    return kl_hessian + p * cg_damping 
+    return kl_hessian + p * cg_damping
+
 
 def kl_divergence(new_actor, old_actor, states):
     mu, std = new_actor(torch.Tensor(states))
-    
+
     mu_old, std_old = old_actor(torch.Tensor(states))
     mu_old = mu_old.detach()
     std_old = std_old.detach()
@@ -98,6 +104,7 @@ def flat_grad(grads):
     grad_flatten = torch.cat(grad_flatten)
     return grad_flatten
 
+
 def flat_hessian(hessians):
     hessians_flatten = []
     for hessian in hessians:
@@ -113,17 +120,18 @@ def flat_params(model):
     params_flatten = torch.cat(params)
     return params_flatten
 
+
 def update_model(model, new_params):
     index = 0
     for params in model.parameters():
         params_length = len(params.view(-1))
-        new_param = new_params[index : index + params_length]
+        new_param = new_params[index: index + params_length]
         new_param = new_param.view(params.size())
         params.data.copy_(new_param)
         index += params_length
 
 
-def backtracking_line_search(old_actor, actor, actor_loss, actor_loss_grad, 
+def backtracking_line_search(old_actor, actor, actor_loss, actor_loss_grad,
                              old_policy, params, maximal_step, max_kl,
                              values, targets, states, actions):
     backtrac_coef = 1.0
@@ -136,7 +144,7 @@ def backtracking_line_search(old_actor, actor, actor_loss, actor_loss_grad,
     for i in range(10):
         new_params = params + backtrac_coef * maximal_step
         update_model(actor, new_params)
-        
+
         new_actor_loss = surrogate_loss(actor, values, targets, states, old_policy.detach(), actions)
 
         loss_improve = new_actor_loss - actor_loss
@@ -155,4 +163,4 @@ def backtracking_line_search(old_actor, actor, actor_loss, actor_loss_grad,
     if not flag:
         params = flat_params(old_actor)
         update_model(actor, params)
-        print('policy update does not impove the surrogate')
+        print('policy update does not improve the surrogate')

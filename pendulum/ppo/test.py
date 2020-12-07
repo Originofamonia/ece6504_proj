@@ -4,8 +4,8 @@ import argparse
 import numpy as np
 
 import torch
-from utils import *
-from model import Actor
+from pendulum.ppo.utils import *
+from pendulum.ppo.model import Actor
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env_name', type=str, default="Pendulum-v0")
@@ -16,7 +16,7 @@ parser.add_argument('--iter', type=int, default=10000)
 parser.add_argument('--log_interval', type=int, default=10)
 args = parser.parse_args()
 
-if __name__=="__main__":
+if __name__ == "__main__":
     env = gym.make(args.env_name)
     env.seed(500)
     torch.manual_seed(500)
@@ -25,16 +25,16 @@ if __name__=="__main__":
     action_size = env.action_space.shape[0]
     print('state size:', state_size)
     print('action size:', action_size)
-    
+
     actor = Actor(state_size, action_size, args)
-    
+
     if args.load_model is not None:
         pretrained_model_path = os.path.join(os.getcwd(), 'save_model', str(args.load_model))
         pretrained_model = torch.load(pretrained_model_path)
         actor.load_state_dict(pretrained_model)
 
     steps = 0
-    
+
     for episode in range(args.iter):
         done = False
         score = 0

@@ -1,4 +1,5 @@
 import os
+import sys
 import gym
 import argparse
 import numpy as np
@@ -7,6 +8,17 @@ from collections import deque
 import torch
 import torch.optim as optim
 from tensorboardX import SummaryWriter
+
+
+def add_path(path):
+    if path not in sys.path:
+        print('Adding {}'.format(path))
+        sys.path.append(path)
+
+
+abs_current_path = os.path.realpath('./')
+root_path = os.path.join('/', *abs_current_path.split(os.path.sep)[:-2])
+add_path(root_path)
 
 from pendulum.trpo.utils import *
 from pendulum.trpo.model import Actor, Critic
@@ -46,7 +58,7 @@ def train_model(actor, critic, critic_optimizer,
     returns = get_returns(rewards, masks, args.gamma)
 
     # ----------------------------
-    # step 2: update ciritic
+    # step 2: update critic
     criterion = torch.nn.MSELoss()
 
     values = critic(torch.Tensor(states))
