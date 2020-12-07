@@ -35,7 +35,7 @@ args = parser.parse_args()
 
 def train_model(actor, critic, actor_optimizer, critic_optimizer,
                 trajectories, state_size, action_size):
-    trajectories = np.array(trajectories)
+    trajectories = np.array(trajectories, dtype="object")
     states = np.vstack(trajectories[:, 0])
     actions = list(trajectories[:, 1])
     rewards = list(trajectories[:, 2])
@@ -165,7 +165,7 @@ def main():
 
             ckpt_path = args.save_path + 'model.pth.tar'
             torch.save(actor.state_dict(), ckpt_path)
-            print('Recent rewards exceed -300. So end')
+            print('Recent rewards: {} exceed -300. So end'.format(recent_rewards))
             break
 
 
