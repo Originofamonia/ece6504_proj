@@ -6,10 +6,10 @@ from collections import deque
 
 import torch
 import torch.optim as optim
-
-from utils import *
-from model import Actor, Critic
 from tensorboardX import SummaryWriter
+
+from pendulum.trpo.utils import *
+from pendulum.trpo.model import Actor, Critic
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env_name', type=str, default="Pendulum-v0")
@@ -28,7 +28,8 @@ parser.add_argument('--logdir', type=str, default='./logs',
                     help='tensorboardx logs directory')
 args = parser.parse_args()
 
-def train_model(actor, critic, critic_optimizer, 
+
+def train_model(actor, critic, critic_optimizer,
                 trajectories, state_size, action_size):
     trajectories = np.array(trajectories)
     states = np.vstack(trajectories[:, 0])
@@ -61,14 +62,14 @@ def train_model(actor, critic, critic_optimizer,
     mu, std = actor(torch.Tensor(states))
     old_policy = get_log_prob(actions, mu, std)
     actor_loss = surrogate_loss(actor, values, targets, states, old_policy.detach(), actions)
-    
+
     actor_loss_grad = torch.autograd.grad(actor_loss, actor.parameters())
     actor_loss_grad = flat_grad(actor_loss_grad)
-    
+
     # ----------------------------
     # step 4: get search direction through conjugate gradient method
     search_dir = conjugate_gradient(actor, states, actor_loss_grad.data, nsteps=10)
-    
+
     # ----------------------------
     # step 5: get step size and maximal step
     gHg = (hessian_vector_product(actor, states, search_dir) * search_dir).sum(0, keepdim=True)
@@ -78,11 +79,11 @@ def train_model(actor, critic, critic_optimizer,
     # ----------------------------    
     # step 6: perform backtracking line search and update actor in trust region
     params = flat_params(actor)
-    
+
     old_actor = Actor(state_size, action_size, args)
     update_model(old_actor, params)
-    
-    backtracking_line_search(old_actor, actor, actor_loss, actor_loss_grad, 
+
+    backtracking_line_search(old_actor, actor, actor_loss, actor_loss_grad,
                              old_policy, params, maximal_step, args.max_kl,
                              values, targets, states, actions)
 
@@ -96,7 +97,7 @@ def main():
     action_size = env.action_space.shape[0]
     print('state size:', state_size)
     print('action size:', action_size)
-    
+
     actor = Actor(state_size, action_size, args)
     critic = Critic(state_size, args)
     critic_optimizer = optim.Adam(critic.parameters(), lr=args.critic_lr)
@@ -106,11 +107,11 @@ def main():
     recent_rewards = deque(maxlen=100)
     episodes = 0
 
-    for iter in range(args.max_iter_num):
+    for it in range(args.max_iter_num):
         trajectories = deque()
         steps = 0
 
-        while steps < args.total_sample_size: 
+        while steps < args.total_sample_size:
             done = False
             score = 0
             episodes += 1
@@ -128,7 +129,7 @@ def main():
                 action = get_action(mu, std)
 
                 next_state, reward, done, _ = env.step(action)
-                
+
                 mask = 0 if done else 1
 
                 trajectories.append((state, action, reward, mask))
@@ -139,24 +140,25 @@ def main():
 
                 if done:
                     recent_rewards.append(score)
-        
+
         actor.train()
-        train_model(actor, critic, critic_optimizer, 
+        train_model(actor, critic, critic_optimizer,
                     trajectories, state_size, action_size)
 
         writer.add_scalar('log/score', float(score), episodes)
-        
-        if iter % args.log_interval == 0:
-            print('{} iter | {} episode | score_avg: {:.2f}'.format(iter, episodes, np.mean(recent_rewards)))    
+
+        if it % args.log_interval == 0:
+            print('{} iter | {} episode | score_avg: {:.2f}'.format(it, episodes, np.mean(recent_rewards)))
 
         if np.mean(recent_rewards) > args.goal_score:
             if not os.path.isdir(args.save_path):
                 os.makedirs(args.save_path)
-            
+
             ckpt_path = args.save_path + 'model.pth.tar'
             torch.save(actor.state_dict(), ckpt_path)
             print('Recent rewards exceed -300. So end')
-            break  
+            break
+
 
 if __name__ == '__main__':
     main()

@@ -6,10 +6,10 @@ from collections import deque
 
 import torch
 import torch.optim as optim
-
-from utils import *
-from model import Actor, Critic
 from tensorboardX import SummaryWriter
+
+from pendulum.ppo.utils import *
+from pendulum.ppo.model import Actor, Critic
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env_name', type=str, default="Pendulum-v0")
@@ -32,7 +32,8 @@ parser.add_argument('--logdir', type=str, default='./logs',
                     help='tensorboardx logs directory')
 args = parser.parse_args()
 
-def train_model(actor, critic, actor_optimizer, critic_optimizer, 
+
+def train_model(actor, critic, actor_optimizer, critic_optimizer,
                 trajectories, state_size, action_size):
     trajectories = np.array(trajectories)
     states = np.vstack(trajectories[:, 0])
@@ -48,7 +49,7 @@ def train_model(actor, critic, actor_optimizer, critic_optimizer,
 
     mu, std = actor(torch.Tensor(states))
     old_policy = get_log_prob(actions, mu, std)
-    
+
     criterion = torch.nn.MSELoss()
 
     n = len(states)
@@ -58,41 +59,41 @@ def train_model(actor, critic, actor_optimizer, critic_optimizer,
         np.random.shuffle(arr)
 
         for i in range(n // args.batch_size):
-            mini_batch_index = arr[args.batch_size * i : args.batch_size * (i + 1)]
+            mini_batch_index = arr[args.batch_size * i: args.batch_size * (i + 1)]
             mini_batch_index = torch.LongTensor(mini_batch_index)
-            
+
             states_samples = torch.Tensor(states)[mini_batch_index]
             actions_samples = torch.Tensor(actions)[mini_batch_index]
-            
+
             # get critic loss
             values_samples = critic(states_samples)
             targets_samples = returns.unsqueeze(1)[mini_batch_index]
-            
+
             critic_loss = criterion(values_samples, targets_samples)
 
             # get actor loss
-            actor_loss, ratio, advantages_samples = surrogate_loss(actor, values_samples, targets_samples, 
-                                                                    states_samples, old_policy.detach(), 
-                                                                    actions_samples, mini_batch_index)
+            actor_loss, ratio, advantages_samples = surrogate_loss(actor, values_samples, targets_samples,
+                                                                   states_samples, old_policy.detach(),
+                                                                   actions_samples, mini_batch_index)
 
             clipped_ratio = torch.clamp(ratio,
                                         1.0 - args.clip_param,
                                         1.0 + args.clip_param)
             clipped_actor_loss = clipped_ratio * advantages_samples
-            
+
             actor_loss = -torch.min(actor_loss, clipped_actor_loss).mean()
 
             # update actor & critic 
             loss = actor_loss + 0.5 * critic_loss
 
             critic_optimizer.zero_grad()
-            loss.backward(retain_graph=True) 
-            critic_optimizer.step()
-
             actor_optimizer.zero_grad()
-            loss.backward()
+
+            loss.backward(retain_graph=True)
+
+            critic_optimizer.step()
             actor_optimizer.step()
-            
+
 
 def main():
     env = gym.make(args.env_name)
@@ -103,10 +104,10 @@ def main():
     action_size = env.action_space.shape[0]
     print('state size:', state_size)
     print('action size:', action_size)
-    
+
     actor = Actor(state_size, action_size, args)
     critic = Critic(state_size, args)
-    
+
     actor_optimizer = optim.Adam(actor.parameters(), lr=args.actor_lr)
     critic_optimizer = optim.Adam(critic.parameters(), lr=args.critic_lr)
 
@@ -115,11 +116,11 @@ def main():
     recent_rewards = deque(maxlen=100)
     episodes = 0
 
-    for iter in range(args.max_iter_num):
+    for it in range(args.max_iter_num):
         trajectories = deque()
         steps = 0
 
-        while steps < args.total_sample_size: 
+        while steps < args.total_sample_size:
             done = False
             score = 0
             episodes += 1
@@ -137,7 +138,7 @@ def main():
                 action = get_action(mu, std)
 
                 next_state, reward, done, _ = env.step(action)
-                
+
                 mask = 0 if done else 1
 
                 trajectories.append((state, action, reward, mask))
@@ -150,22 +151,23 @@ def main():
                     recent_rewards.append(score)
 
         actor.train(), critic.train()
-        train_model(actor, critic, actor_optimizer, critic_optimizer, 
+        train_model(actor, critic, actor_optimizer, critic_optimizer,
                     trajectories, state_size, action_size)
-        
+
         writer.add_scalar('log/score', float(score), episodes)
-        
-        if iter % args.log_interval == 0:
-            print('{} iter | {} episode | score_avg: {:.2f}'.format(iter, episodes, np.mean(recent_rewards)))
+
+        if it % args.log_interval == 0:
+            print('{} iter | {} episode | score_avg: {:.2f}'.format(it, episodes, np.mean(recent_rewards)))
 
         if np.mean(recent_rewards) > args.goal_score:
             if not os.path.isdir(args.save_path):
                 os.makedirs(args.save_path)
-            
+
             ckpt_path = args.save_path + 'model.pth.tar'
             torch.save(actor.state_dict(), ckpt_path)
             print('Recent rewards exceed -300. So end')
-            break  
+            break
+
 
 if __name__ == '__main__':
     main()
