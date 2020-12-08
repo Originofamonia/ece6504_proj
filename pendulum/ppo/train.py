@@ -7,7 +7,6 @@ from collections import deque
 
 import torch
 import torch.optim as optim
-from tensorboardX import SummaryWriter
 
 
 def add_path(path):
@@ -23,29 +22,8 @@ add_path(root_path)
 from pendulum.ppo.utils import *
 from pendulum.ppo.model import Actor, Critic
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--env_name', type=str, default="Pendulum-v0")
-parser.add_argument('--load_model', type=str, default=None)
-parser.add_argument('--save_path', default='./save_model/', help='')
-parser.add_argument('--render', action="store_true", default=False)
-parser.add_argument('--gamma', type=float, default=0.99)
-parser.add_argument('--lamda', type=float, default=0.98)
-parser.add_argument('--hidden_size', type=int, default=64)
-parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--actor_lr', type=float, default=1e-3)
-parser.add_argument('--critic_lr', type=float, default=1e-3)
-parser.add_argument('--model_update_num', type=int, default=10)
-parser.add_argument('--clip_param', type=float, default=0.2)
-parser.add_argument('--max_iter_num', type=int, default=500)
-parser.add_argument('--total_sample_size', type=int, default=2048)
-parser.add_argument('--log_interval', type=int, default=5)
-parser.add_argument('--goal_score', type=int, default=-300)
-parser.add_argument('--logdir', type=str, default='./logs',
-                    help='tensorboardx logs directory')
-args = parser.parse_args()
 
-
-def train_model(actor, critic, actor_optimizer, critic_optimizer,
+def train_model(args, actor, critic, actor_optimizer, critic_optimizer,
                 trajectories, state_size, action_size):
     trajectories = np.array(trajectories, dtype="object")
     states = np.vstack(trajectories[:, 0])
@@ -108,6 +86,27 @@ def train_model(actor, critic, actor_optimizer, critic_optimizer,
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--env_name', type=str, default="Pendulum-v0")
+    parser.add_argument('--load_model', type=str, default=None)
+    parser.add_argument('--save_path', default='./save_model/', help='')
+    parser.add_argument('--render', action="store_true", default=False)
+    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--lamda', type=float, default=0.98)
+    parser.add_argument('--hidden_size', type=int, default=64)
+    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--actor_lr', type=float, default=1e-3)
+    parser.add_argument('--critic_lr', type=float, default=1e-3)
+    parser.add_argument('--model_update_num', type=int, default=10)
+    parser.add_argument('--clip_param', type=float, default=0.2)
+    parser.add_argument('--max_iter_num', type=int, default=500)
+    parser.add_argument('--total_sample_size', type=int, default=2048)
+    parser.add_argument('--log_interval', type=int, default=5)
+    parser.add_argument('--goal_score', type=int, default=-300)
+    parser.add_argument('--logdir', type=str, default='./logs',
+                        help='tensorboardx logs directory')
+    args = parser.parse_args()
+
     env = gym.make(args.env_name)
     env.seed(500)
     torch.manual_seed(500)
@@ -123,12 +122,10 @@ def main():
     actor_optimizer = optim.Adam(actor.parameters(), lr=args.actor_lr)
     critic_optimizer = optim.Adam(critic.parameters(), lr=args.critic_lr)
 
-    writer = SummaryWriter(args.logdir)
-
     recent_rewards = deque(maxlen=100)
     episodes = 0
 
-    with open('avg_rewards_ppo.txt', 'w') as fh:
+    with open('logs/avg_rewards_ppo.txt', 'w') as fh:
         for it in range(args.max_iter_num):
             trajectories = deque()
             steps = 0
@@ -164,10 +161,9 @@ def main():
                         recent_rewards.append(score)
 
             actor.train(), critic.train()
-            train_model(actor, critic, actor_optimizer, critic_optimizer,
+            train_model(args, actor, critic, actor_optimizer, critic_optimizer,
                         trajectories, state_size, action_size)
 
-            writer.add_scalar('log/score', float(score), episodes)
             fh.write('%s\n' % np.mean(recent_rewards))
 
             if it % args.log_interval == 0:
