@@ -119,57 +119,50 @@ def main():
     recent_rewards = deque(maxlen=100)
     episodes = 0
 
-    for it in range(args.max_iter_num):
-        trajectories = deque()
-        steps = 0
+    with open('avg_rewards_trpo.txt', 'w') as fh:
+        for it in range(args.max_iter_num):
+            trajectories = deque()
+            steps = 0
 
-        while steps < args.total_sample_size:
-            done = False
-            score = 0
-            episodes += 1
+            while steps < args.total_sample_size:
+                done = False
+                score = 0
+                episodes += 1
 
-            state = env.reset()
-            state = np.reshape(state, [1, state_size])
+                state = env.reset()
+                state = np.reshape(state, [1, state_size])
 
-            while not done:
-                if args.render:
-                    env.render()
+                while not done:
+                    if args.render:
+                        env.render()
 
-                steps += 1
+                    steps += 1
 
-                mu, std = actor(torch.Tensor(state))
-                action = get_action(mu, std)
+                    mu, std = actor(torch.Tensor(state))
+                    action = get_action(mu, std)
 
-                next_state, reward, done, _ = env.step(action)
+                    next_state, reward, done, _ = env.step(action)
 
-                mask = 0 if done else 1
+                    mask = 0 if done else 1
 
-                trajectories.append((state, action, reward, mask))
+                    trajectories.append((state, action, reward, mask))
 
-                next_state = np.reshape(next_state, [1, state_size])
-                state = next_state
-                score += reward
+                    next_state = np.reshape(next_state, [1, state_size])
+                    state = next_state
+                    score += reward
 
-                if done:
-                    recent_rewards.append(score)
+                    if done:
+                        recent_rewards.append(score)
 
-        actor.train()
-        train_model(actor, critic, critic_optimizer,
-                    trajectories, state_size, action_size)
+            actor.train()
+            train_model(actor, critic, critic_optimizer,
+                        trajectories, state_size, action_size)
 
-        writer.add_scalar('log/score', float(score), episodes)
+            writer.add_scalar('log/score', float(score), episodes)
+            fh.write('%s\n' % np.mean(recent_rewards))
 
-        if it % args.log_interval == 0:
-            print('{} iter | {} episode | score_avg: {:.2f}'.format(it, episodes, np.mean(recent_rewards)))
-
-        if np.mean(recent_rewards) > args.goal_score:
-            if not os.path.isdir(args.save_path):
-                os.makedirs(args.save_path)
-
-            ckpt_path = args.save_path + 'model.pth.tar'
-            torch.save(actor.state_dict(), ckpt_path)
-            print('Recent rewards: {} exceed -300. So end'.format(recent_rewards))
-            break
+            if it % args.log_interval == 0:
+                print('{} iter | {} episode | score_avg: {:.2f}'.format(it, episodes, np.mean(recent_rewards)))
 
 
 if __name__ == '__main__':
