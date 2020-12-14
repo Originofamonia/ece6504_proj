@@ -4,8 +4,8 @@ import argparse
 import numpy as np
 
 import torch
-from pendulum.trpo.utils import *
-from pendulum.trpo.model import Actor
+from pendulum.trpo.trpo_utils import *
+from pendulum.trpo.trpo_model import Actor
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env_name', type=str, default="Pendulum-v0")

@@ -19,8 +19,8 @@ abs_current_path = os.path.realpath('./')
 root_path = os.path.join('/', *abs_current_path.split(os.path.sep)[:-2])
 add_path(root_path)
 
-from pendulum.ppo.utils import *
-from pendulum.ppo.model import Actor, Critic
+from pendulum.ppo.ppo_utils import *
+from pendulum.ppo.ppo_model import Actor, Critic
 
 
 def train_model(args, actor, critic, actor_optimizer, critic_optimizer,
@@ -74,7 +74,7 @@ def train_model(args, actor, critic, actor_optimizer, critic_optimizer,
             actor_loss = -torch.min(actor_loss, clipped_actor_loss).mean()
 
             # update actor & critic 
-            loss = actor_loss + 0.5 * critic_loss
+            loss = actor_loss + 2 * critic_loss
 
             critic_optimizer.zero_grad()
             actor_optimizer.zero_grad()

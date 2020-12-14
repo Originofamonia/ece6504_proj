@@ -19,8 +19,8 @@ abs_current_path = os.path.realpath('./')
 root_path = os.path.join('/', *abs_current_path.split(os.path.sep)[:-2])
 add_path(root_path)
 
-from pendulum.trpo.utils import *
-from pendulum.trpo.model import Actor, Critic
+from pendulum.trpo.trpo_utils import *
+from pendulum.trpo.trpo_model import Actor, Critic
 
 
 def train_model(args, actor, critic, critic_optimizer,
